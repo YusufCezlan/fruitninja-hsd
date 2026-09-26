@@ -80,7 +80,7 @@ function gameLoop(timestamp) {
 
     drawBackground();
 
-    // En fazla 3 nesnelik dalgalar halinde fırlatma (Her 1.3 saniyede bir)
+    // 1.3 Saniyede Bir Dalga Fırlatma
     if (timestamp - lastSpawnTime > 1300) {
         spawnWave();
         lastSpawnTime = timestamp;
@@ -96,12 +96,20 @@ function gameLoop(timestamp) {
 
         drawObject(obj);
 
+        // Kesme Kontrolü
         if (checkSlice(obj)) {
             objects.splice(i, 1);
             continue;
         }
 
-        if (obj.y > HEIGHT + 150 || obj.x < -150 || obj.x > WIDTH + 150) {
+        // Ekrandan Düşme / Kaçırma Kontrolü
+        if (obj.y > HEIGHT + 150 || obj.x < -180 || obj.x > WIDTH + 180) {
+            // Kaçırılan Meyve -> 1 Can Götürür
+            if (obj.type === 'fruit') {
+                lives--;
+                updateUI();
+                if (lives <= 0) endGame();
+            }
             objects.splice(i, 1);
         }
     }
@@ -185,21 +193,18 @@ function onResults(results) {
     }
 }
 
-// --- 5. DİNAMİK BOMBA ORANLI VE EN FAZLA 3 NESNELİ FIRLATMA ---
+// --- 5. FARKLI YÖNLERDEN FIRLATMA VE DİNAMİK BOMBA MANTIĞI ---
 
 function spawnWave() {
-    // Aynı anda en fazla 3 tane nesne çıkabilir
-    const count = Math.floor(Math.random() * 3) + 1; // 1, 2 veya 3 tane
-
-    // Dalgadaki eleman sayısına göre bomba çıkma ihtimali ayarlanır
-    // Çoklu meyve varsa bomba şansı çok düşük (%2), tekli gelişlerde daha yüksek (%10)
-    let bombChance = (count === 1) ? 0.10 : 0.02;
+    // Aynı anda 1 ile 3 arası nesne fırlat
+    const count = Math.floor(Math.random() * 3) + 1;
+    const bombChance = (count === 1) ? 0.12 : 0.02;
 
     for (let i = 0; i < count; i++) {
         setTimeout(() => {
             const isBomb = Math.random() < bombChance;
             spawnObject(isBomb);
-        }, i * 140);
+        }, i * 160);
     }
 }
 
@@ -207,26 +212,26 @@ function spawnObject(isBomb) {
     const side = Math.random();
     let x, y, vx, vy, gravity;
 
-    if (side < 0.6) {
-        // Alt taraftan yukarı
-        x = WIDTH * (0.15 + Math.random() * 0.7);
+    if (side < 0.4) {
+        // Alt taraftan yukarıya
+        x = WIDTH * (0.2 + Math.random() * 0.6);
         y = HEIGHT + 60;
         vx = (Math.random() - 0.5) * 6;
         vy = -(Math.random() * 3 + 14);
         gravity = 0.20;
-    } else if (side < 0.8) {
-        // Sol kenardan
-        x = -50;
-        y = HEIGHT * (0.3 + Math.random() * 0.5);
-        vx = Math.random() * 5 + 9;
-        vy = -(Math.random() * 4 + 8);
+    } else if (side < 0.7) {
+        // Sol kenardan sağ/yukarı çapraz
+        x = -60;
+        y = HEIGHT * (0.35 + Math.random() * 0.45);
+        vx = Math.random() * 6 + 8;
+        vy = -(Math.random() * 4 + 7);
         gravity = 0.18;
     } else {
-        // Sağ kenardan
-        x = WIDTH + 50;
-        y = HEIGHT * (0.3 + Math.random() * 0.5);
-        vx = -(Math.random() * 5 + 9);
-        vy = -(Math.random() * 4 + 8);
+        // Sağ kenardan sol/yukarı çapraz
+        x = WIDTH + 60;
+        y = HEIGHT * (0.35 + Math.random() * 0.45);
+        vx = -(Math.random() * 6 + 8);
+        vy = -(Math.random() * 4 + 7);
         gravity = 0.18;
     }
 
@@ -263,7 +268,7 @@ function checkSlice(obj) {
             score += obj.score;
         } else if (obj.type === 'bomb') {
             score = Math.max(0, score - 5);
-            lives--;
+            lives -= 5; // Bombaya vurunca 5 CAN gider
             if (lives <= 0) endGame();
         }
         updateUI();
@@ -393,7 +398,7 @@ function drawKatanaAndHand() {
 
 function updateUI() {
     scoreValSpan.innerText = score;
-    livesValSpan.innerText = lives;
+    livesValSpan.innerText = Math.max(0, lives);
 }
 
 function endGame() {
