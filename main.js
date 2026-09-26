@@ -8,7 +8,7 @@ const scoreValSpan = document.getElementById('scoreVal');
 const livesValSpan = document.getElementById('livesVal');
 const finalScoreSpan = document.getElementById('finalScoreVal');
 
-// Tam Ekran Ayarları
+// Dynamic Canvas Resizing
 let WIDTH = window.innerWidth;
 let HEIGHT = window.innerHeight;
 
@@ -27,10 +27,16 @@ let lives = 10;
 let isGameOver = false;
 let isMediaPipeReady = false;
 
-// Nesne Havuzu
+// Zaman, Hızlanma ve Çarpan Sistemi
+let startTime = 0;
+let elapsedTime = 0; // saniye
+let scoreMultiplier = 1;
+let globalSpeedMultiplier = 1;
+
+// Meyve Tanımları
 const objects = [];
 const fruitDefinitions = [
-    { name: 'Karpuz', type: 'watermelon', baseScore: 15 },
+    { name: 'Karpuz Dilimi', type: 'watermelon_slice', baseScore: 15 },
     { name: 'Muz', type: 'banana', baseScore: 10 },
     { name: 'Çilek', type: 'strawberry', baseScore: 12 },
     { name: 'Portakal', type: 'orange', baseScore: 10 },
@@ -79,10 +85,19 @@ let lastSpawnTime = 0;
 function gameLoop(timestamp) {
     if (isGameOver || !isMediaPipeReady) return;
 
+    if (!startTime) startTime = timestamp;
+    elapsedTime = Math.floor((timestamp - startTime) / 1000);
+
+    // Zamanla Hızlanma ve Çarpan Artışı
+    // Her 15 saniyede bir çarpan ve hız artar
+    scoreMultiplier = 1 + Math.floor(elapsedTime / 15) * 0.5; // 1x, 1.5x, 2x...
+    globalSpeedMultiplier = 1 + (elapsedTime / 45); // Yavaşça hızlanır
+
     drawBackground();
 
-    // 1.2 Saniyede Bir Dalga Fırlatma
-    if (timestamp - lastSpawnTime > 1200) {
+    // Dinamik Fırlatma Aralığı (Zamanla sıklaşır)
+    const spawnInterval = Math.max(700, 1300 - (elapsedTime * 8));
+    if (timestamp - lastSpawnTime > spawnInterval) {
         spawnWave();
         lastSpawnTime = timestamp;
     }
@@ -90,25 +105,22 @@ function gameLoop(timestamp) {
     for (let i = objects.length - 1; i >= 0; i--) {
         const obj = objects[i];
         
-        // Fizik Hareketi
         obj.x += obj.vx;
         obj.y += obj.vy;
         obj.vy += obj.gravity;
         obj.rotation += obj.vRot;
 
-        // Meyveyi Özel Şekliyle Çiz
         drawFruitOrBomb(obj);
 
-        // Kesme Kontrolü
         if (checkSlice(obj)) {
             objects.splice(i, 1);
             continue;
         }
 
-        // Ekrandan Düşme / Kaçırma Kontrolü
+        // Kaçırma Kontrolü
         if (obj.y > HEIGHT + 160 || obj.x < -200 || obj.x > WIDTH + 200) {
             if (obj.type !== 'bomb') {
-                lives--; // KAÇIRILAN HER MEYVE = -1 CAN
+                lives--;
                 updateUI();
                 if (lives <= 0) endGame();
             }
@@ -117,11 +129,12 @@ function gameLoop(timestamp) {
     }
 
     drawKatanaAndHand();
+    drawTopUI();
 
     requestAnimationFrame(gameLoop);
 }
 
-// --- 4. EN YAKIN ELİ SEÇME ALGORİTMASI ---
+// --- 4. EL ALGILAMA ---
 function onResults(results) {
     if (!isMediaPipeReady) {
         isMediaPipeReady = true;
@@ -195,17 +208,17 @@ function onResults(results) {
     }
 }
 
-// --- 5. RASTGELE FIRLATMA, BOYUT VE HIZ MANTIĞI ---
+// --- 5. RASTGELE FIRLATMA MANTIĞI ---
 
 function spawnWave() {
-    const count = Math.floor(Math.random() * 3) + 1; // 1 ile 3 arası
+    const count = Math.floor(Math.random() * 3) + 1;
     const bombChance = (count === 1) ? 0.12 : 0.02;
 
     for (let i = 0; i < count; i++) {
         setTimeout(() => {
             const isBomb = Math.random() < bombChance;
             spawnObject(isBomb);
-        }, i * 150);
+        }, i * 140);
     }
 }
 
@@ -213,29 +226,25 @@ function spawnObject(isBomb) {
     const side = Math.random();
     let x, y, vx, vy, gravity;
 
-    // Hız Varyasyonu (Hızlı ve Yavaşlar karışık)
-    const speedMult = 0.85 + Math.random() * 0.5; // %85 ile %135 arası hız çarpanı
+    const currentSpeed = (0.9 + Math.random() * 0.4) * globalSpeedMultiplier;
 
     if (side < 0.4) {
-        // Alt taraftan yukarı
         x = WIDTH * (0.2 + Math.random() * 0.6);
         y = HEIGHT + 60;
-        vx = (Math.random() - 0.5) * 6 * speedMult;
-        vy = -(Math.random() * 4 + 13) * speedMult;
+        vx = (Math.random() - 0.5) * 6 * currentSpeed;
+        vy = -(Math.random() * 4 + 13) * currentSpeed;
         gravity = 0.20;
     } else if (side < 0.7) {
-        // Sol kenardan sağa
         x = -60;
         y = HEIGHT * (0.35 + Math.random() * 0.45);
-        vx = (Math.random() * 5 + 8) * speedMult;
-        vy = -(Math.random() * 4 + 7) * speedMult;
+        vx = (Math.random() * 5 + 8) * currentSpeed;
+        vy = -(Math.random() * 4 + 7) * currentSpeed;
         gravity = 0.18;
     } else {
-        // Sağ kenardan sola
         x = WIDTH + 60;
         y = HEIGHT * (0.35 + Math.random() * 0.45);
-        vx = -(Math.random() * 5 + 8) * speedMult;
-        vy = -(Math.random() * 4 + 7) * speedMult;
+        vx = -(Math.random() * 5 + 8) * currentSpeed;
+        vy = -(Math.random() * 4 + 7) * currentSpeed;
         gravity = 0.18;
     }
 
@@ -249,13 +258,12 @@ function spawnObject(isBomb) {
         });
     } else {
         const typeDef = fruitDefinitions[Math.floor(Math.random() * fruitDefinitions.length)];
-        // Boyut Çeşitliliği (Küçük: 0.7, Orta: 1.0, Büyük: 1.3)
-        const sizeScale = 0.75 + Math.random() * 0.55; 
+        const sizeScale = 0.8 + Math.random() * 0.4; 
         
         objects.push({
             type: typeDef.type,
             name: typeDef.name,
-            score: Math.round(typeDef.baseScore * sizeScale),
+            baseScore: typeDef.baseScore,
             radius: 55 * sizeScale,
             scale: sizeScale,
             x, y, vx, vy, gravity,
@@ -272,12 +280,14 @@ function checkSlice(obj) {
     const dy = handY - obj.y;
     const distance = Math.sqrt(dx * dx + dy * dy);
 
-    if (distance < obj.radius + 120) {
+    if (distance < obj.radius + 115) {
         if (obj.type !== 'bomb') {
-            score += obj.score;
+            // Çarpanlı Puan Kazanımı
+            const pointsGained = Math.round(obj.baseScore * scoreMultiplier);
+            score += pointsGained;
         } else {
             score = Math.max(0, score - 5);
-            lives -= 5; // BOMBAYA VURUNCA -5 CAN
+            lives -= 5;
             if (lives <= 0) endGame();
         }
         updateUI();
@@ -309,7 +319,7 @@ function drawBackground() {
     canvasCtx.restore();
 }
 
-// --- 6. ÖZEL ŞEKİLLİ MEYVE ÇİZİMLERİ ---
+// --- 6. GERÇEKÇİ MEYVE VE BİREBİR KARPUZ DİLİMİ ÇİZİMİ ---
 
 function drawFruitOrBomb(obj) {
     canvasCtx.save();
@@ -318,7 +328,6 @@ function drawFruitOrBomb(obj) {
     const r = obj.radius;
 
     if (obj.type === 'bomb') {
-        // Bomba Gövdesi
         canvasCtx.beginPath();
         canvasCtx.arc(0, 0, r, 0, Math.PI * 2);
         canvasCtx.fillStyle = '#1e293b';
@@ -327,7 +336,6 @@ function drawFruitOrBomb(obj) {
         canvasCtx.lineWidth = 4;
         canvasCtx.stroke();
 
-        // Fitil & Ateş
         canvasCtx.beginPath();
         canvasCtx.moveTo(0, -r);
         canvasCtx.quadraticCurveTo(15, -r - 15, 10, -r - 25);
@@ -340,27 +348,38 @@ function drawFruitOrBomb(obj) {
         canvasCtx.fillStyle = '#f59e0b';
         canvasCtx.fill();
 
-    } else if (obj.type === 'watermelon') {
-        // Karpuz (Yeşil Çizgili Oval Gövde)
+    } else if (obj.type === 'watermelon_slice') {
+        // BİREBİR KARPUZ DİLİMİ (Üçgen Form, Kabuk ve Çekirdekler)
         canvasCtx.beginPath();
-        canvasCtx.ellipse(0, 0, r * 1.1, r * 0.9, 0, 0, Math.PI * 2);
-        canvasCtx.fillStyle = '#27ae60';
+        canvasCtx.moveTo(-r, -r * 0.5);
+        canvasCtx.lineTo(r, -r * 0.5);
+        canvasCtx.quadraticCurveTo(0, r * 1.2, -r, -r * 0.5);
+        canvasCtx.closePath();
+
+        // Kırmızı Meyve Eti
+        canvasCtx.fillStyle = '#e74c3c';
         canvasCtx.fill();
-        canvasCtx.strokeStyle = '#1e8449';
-        canvasCtx.lineWidth = 6;
+
+        // Yeşil Dış Kabuk
+        canvasCtx.strokeStyle = '#27ae60';
+        canvasCtx.lineWidth = 8;
         canvasCtx.stroke();
 
-        // Koyu Çizgiler
-        canvasCtx.strokeStyle = '#145a32';
-        canvasCtx.lineWidth = 5;
-        for (let i = -1; i <= 1; i++) {
+        // Beyaz/Açık Yeşil İç Kabuk Şeridi
+        canvasCtx.strokeStyle = '#2ecc71';
+        canvasCtx.lineWidth = 3;
+        canvasCtx.stroke();
+
+        // Siyah Çekirdekler
+        canvasCtx.fillStyle = '#1c2833';
+        const seeds = [[-r*0.4, -r*0.1], [0, r*0.3], [r*0.4, -r*0.1], [-r*0.2, r*0.1], [r*0.2, r*0.1]];
+        seeds.forEach(([sx, sy]) => {
             canvasCtx.beginPath();
-            canvasCtx.arc(0, 0, r * 0.8, (i * 0.5) - 0.3, (i * 0.5) + 0.3);
-            canvasCtx.stroke();
-        }
+            canvasCtx.arc(sx, sy, 3.5, 0, Math.PI * 2);
+            canvasCtx.fill();
+        });
 
     } else if (obj.type === 'banana') {
-        // Muz (Kıvrımlı Sarı Muz Şekli)
         canvasCtx.beginPath();
         canvasCtx.moveTo(-r * 0.8, -r * 0.4);
         canvasCtx.quadraticCurveTo(0, r * 0.8, r * 0.9, -r * 0.2);
@@ -371,12 +390,10 @@ function drawFruitOrBomb(obj) {
         canvasCtx.lineWidth = 4;
         canvasCtx.stroke();
 
-        // Uç sap detayları
         canvasCtx.fillStyle = '#7e5109';
         canvasCtx.fillRect(-r * 0.85, -r * 0.45, 8, 8);
 
     } else if (obj.type === 'strawberry') {
-        // Çilek (Kalp/Üçgen Formu)
         canvasCtx.beginPath();
         canvasCtx.moveTo(0, r * 0.9);
         canvasCtx.bezierCurveTo(-r * 1.1, 0, -r * 0.8, -r * 0.8, 0, -r * 0.6);
@@ -384,7 +401,6 @@ function drawFruitOrBomb(obj) {
         canvasCtx.fillStyle = '#e74c3c';
         canvasCtx.fill();
 
-        // Benekler
         canvasCtx.fillStyle = '#f9e79f';
         const dots = [[-0.3, -0.1], [0.3, -0.1], [0, 0.3], [-0.2, 0.4], [0.2, 0.4]];
         dots.forEach(([dx, dy]) => {
@@ -393,14 +409,12 @@ function drawFruitOrBomb(obj) {
             canvasCtx.fill();
         });
 
-        // Yeşil Yapraklar
         canvasCtx.fillStyle = '#2ecc71';
         canvasCtx.beginPath();
         canvasCtx.arc(0, -r * 0.6, r * 0.35, 0, Math.PI, true);
         canvasCtx.fill();
 
     } else if (obj.type === 'orange') {
-        // Portakal (Yuvarlak Gözenekli Doku)
         canvasCtx.beginPath();
         canvasCtx.arc(0, 0, r, 0, Math.PI * 2);
         canvasCtx.fillStyle = '#e67e22';
@@ -409,14 +423,12 @@ function drawFruitOrBomb(obj) {
         canvasCtx.lineWidth = 4;
         canvasCtx.stroke();
 
-        // İç halka
         canvasCtx.beginPath();
         canvasCtx.arc(0, 0, r * 0.75, 0, Math.PI * 2);
         canvasCtx.fillStyle = '#f39c12';
         canvasCtx.fill();
 
     } else if (obj.type === 'lemon') {
-        // Limon (Uçları Çıkıntılı Oval Form)
         canvasCtx.beginPath();
         canvasCtx.ellipse(0, 0, r * 1.1, r * 0.8, 0, 0, Math.PI * 2);
         canvasCtx.fillStyle = '#f1c40f';
@@ -424,17 +436,12 @@ function drawFruitOrBomb(obj) {
         canvasCtx.strokeStyle = '#f39c12';
         canvasCtx.lineWidth = 4;
         canvasCtx.stroke();
-
-        // Sivri Uçlar
-        canvasCtx.beginPath();
-        canvasCtx.arc(-r * 1.1, 0, r * 0.15, 0, Math.PI * 2);
-        canvasCtx.arc(r * 1.1, 0, r * 0.15, 0, Math.PI * 2);
-        canvasCtx.fillStyle = '#f39c12';
-        canvasCtx.fill();
     }
 
     canvasCtx.restore();
 }
+
+// --- 7. %85 ORANINDA KÜÇÜLTÜLMÜŞ KATANA ÇİZİMİ ---
 
 function drawKatanaAndHand() {
     if (handX === null || handY === null) return;
@@ -447,10 +454,10 @@ function drawKatanaAndHand() {
             canvasCtx.lineTo(bladeTrail[i].x, bladeTrail[i].y);
         }
         canvasCtx.strokeStyle = isFistClosed ? '#ef4444' : '#38bdf8';
-        canvasCtx.lineWidth = 28;
+        canvasCtx.lineWidth = 24; // %85 Çap
         canvasCtx.lineCap = 'round';
         canvasCtx.shadowColor = isFistClosed ? '#f59e0b' : '#0284c7';
-        canvasCtx.shadowBlur = 35;
+        canvasCtx.shadowBlur = 30;
         canvasCtx.stroke();
         canvasCtx.restore();
     }
@@ -459,28 +466,47 @@ function drawKatanaAndHand() {
     canvasCtx.translate(handX, handY);
     canvasCtx.rotate(bladeAngle + Math.PI / 4);
 
+    // Katana Kabzası
     canvasCtx.fillStyle = '#000000';
-    canvasCtx.fillRect(-12, 18, 24, 60);
+    canvasCtx.fillRect(-10, 15, 20, 50);
     canvasCtx.fillStyle = '#f59e0b';
-    canvasCtx.fillRect(-22, 10, 44, 12);
+    canvasCtx.fillRect(-18, 8, 36, 10);
 
+    // %85 Oranında Küçültülmüş Katana Bıçağı (204px)
     canvasCtx.beginPath();
-    canvasCtx.moveTo(-10, 10);
-    canvasCtx.lineTo(-4, -240);
-    canvasCtx.lineTo(12, -220);
-    canvasCtx.lineTo(10, 10);
+    canvasCtx.moveTo(-8, 8);
+    canvasCtx.lineTo(-3, -204);
+    canvasCtx.lineTo(10, -187);
+    canvasCtx.lineTo(8, 8);
     canvasCtx.closePath();
 
     canvasCtx.fillStyle = isFistClosed ? '#ffffff' : 'rgba(255, 255, 255, 0.85)';
     canvasCtx.shadowColor = isFistClosed ? '#ef4444' : '#38bdf8';
-    canvasCtx.shadowBlur = 30;
+    canvasCtx.shadowBlur = 25;
     canvasCtx.fill();
 
-    canvasCtx.font = '42px sans-serif';
+    // El İkonu
+    canvasCtx.font = '36px sans-serif';
     canvasCtx.textAlign = 'center';
     canvasCtx.textBaseline = 'middle';
-    canvasCtx.fillText(isFistClosed ? '✊' : '🖐️', 0, 105);
+    canvasCtx.fillText(isFistClosed ? '✊' : '🖐️', 0, 90);
 
+    canvasCtx.restore();
+}
+
+// --- 8. ZAMAN VE ÇARPAN BİLGİ SEKMESİ (ÜST EKRAN) ---
+
+function drawTopUI() {
+    canvasCtx.save();
+    canvasCtx.font = 'bold 26px sans-serif';
+    canvasCtx.fillStyle = '#f1c40f';
+    canvasCtx.textAlign = 'center';
+    
+    // Dakika:Saniye Formatı
+    const mins = Math.floor(elapsedTime / 60).toString().padStart(2, '0');
+    const secs = (elapsedTime % 60).toString().padStart(2, '0');
+    
+    canvasCtx.fillText(`⏱️ SÜRE: ${mins}:${secs}   |   🔥 ÇARPAN: ${scoreMultiplier}x`, WIDTH / 2, 45);
     canvasCtx.restore();
 }
 
@@ -498,6 +524,10 @@ function endGame() {
 function resetGame() {
     score = 0;
     lives = 10;
+    startTime = 0;
+    elapsedTime = 0;
+    scoreMultiplier = 1;
+    globalSpeedMultiplier = 1;
     isGameOver = false;
     objects.length = 0;
     bladeTrail.length = 0;
