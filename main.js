@@ -21,31 +21,32 @@ function resizeCanvas() {
 window.addEventListener('resize', resizeCanvas);
 resizeCanvas();
 
-// Oyun Durumu
+// Oyun Durumu (Can 20 olarak ayarlandı)
 let score = 0;
-let lives = 3;
+let lives = 20;
 let isGameOver = false;
 let isMediaPipeReady = false;
 
 // Meyve ve Bomba Tanımları
 const objects = [];
 const fruitTypes = [
-    { type: 'fruit', name: 'Karpuz', mainColor: '#27ae60', innerColor: '#e74c3c', score: 15, radius: 70, icon: '🍉' },
-    { type: 'fruit', name: 'Portakal', mainColor: '#e67e22', innerColor: '#f39c12', score: 10, radius: 60, icon: '🍊' },
-    { type: 'fruit', name: 'Limon', mainColor: '#f1c40f', innerColor: '#f39c12', score: 10, radius: 55, icon: '🍋' },
-    { type: 'fruit', name: 'Elma', mainColor: '#c0392b', innerColor: '#e74c3c', score: 10, radius: 58, icon: '🍎' }
+    { type: 'fruit', name: 'Karpuz', mainColor: '#27ae60', innerColor: '#e74c3c', score: 15, radius: 75, icon: '🍉' },
+    { type: 'fruit', name: 'Portakal', mainColor: '#e67e22', innerColor: '#f39c12', score: 10, radius: 65, icon: '🍊' },
+    { type: 'fruit', name: 'Limon', mainColor: '#f1c40f', innerColor: '#f39c12', score: 10, radius: 60, icon: '🍋' },
+    { type: 'fruit', name: 'Elma', mainColor: '#c0392b', innerColor: '#e74c3c', score: 10, radius: 62, icon: '🍎' }
 ];
 
-// El Takibi ve Katana Değişkenleri
+// El Takibi, "Sticky Hand" ve Katana Değişkenleri
 let handX = null;
 let handY = null;
 let lastHandX = null;
 let lastHandY = null;
 let bladeAngle = 0;
-let isFistClosed = false; // Yumruk sıkılı mı?
+let isFistClosed = false;
+let lastSeenHandTime = 0;
 const bladeTrail = [];
 
-// --- 1. MEDIAPIPE HANDS KURULUMU ---
+// --- 1. OPTİMİZE EDİLMİŞ MEDIAPIPE HANDS KURULUMU ---
 const hands = new Hands({locateFile: (file) => {
     return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
 }});
@@ -53,8 +54,8 @@ const hands = new Hands({locateFile: (file) => {
 hands.setOptions({
     maxNumHands: 1,
     modelComplexity: 1,
-    minDetectionConfidence: 0.6,
-    minTrackingConfidence: 0.6
+    minDetectionConfidence: 0.4,
+    minTrackingConfidence: 0.4
 });
 
 hands.onResults(onResults);
@@ -77,11 +78,10 @@ let lastSpawnTime = 0;
 function gameLoop(timestamp) {
     if (isGameOver || !isMediaPipeReady) return;
 
-    // Arka Plan
     drawBackground();
 
     // Zamanlı Meyve Fırlatma
-    if (timestamp - lastSpawnTime > 1200) {
+    if (timestamp - lastSpawnTime > 1100) {
         spawnObject();
         lastSpawnTime = timestamp;
     }
@@ -92,34 +92,27 @@ function gameLoop(timestamp) {
         
         obj.x += obj.vx;
         obj.y += obj.vy;
-        obj.vy += 0.22; // Yumuşak yerçekimi
+        obj.vy += 0.20;
         obj.rotation += obj.vRot;
 
         drawObject(obj);
 
-        // Yalnızca YUMRUK SIKILIYKEN kesme işlemi yap
-        if (isFistClosed && checkSlice(obj)) {
+        if (checkSlice(obj)) {
             objects.splice(i, 1);
             continue;
         }
 
-        if (obj.y > HEIGHT + 100) {
-            if (obj.type === 'fruit') {
-                lives--;
-                updateUI();
-                if (lives <= 0) endGame();
-            }
+        if (obj.y > HEIGHT + 120) {
             objects.splice(i, 1);
         }
     }
 
-    // Katana, El ve Efektleri Çiz
     drawKatanaAndHand();
 
     requestAnimationFrame(gameLoop);
 }
 
-// --- 4. EL ALGILAMA & YUMRUK TESPİTİ ---
+// --- 4. YAPIŞKAN EL VE YUMRUK ALGILAMA ---
 function onResults(results) {
     if (!isMediaPipeReady) {
         isMediaPipeReady = true;
@@ -127,10 +120,12 @@ function onResults(results) {
         requestAnimationFrame(gameLoop);
     }
 
+    const now = Date.now();
+
     if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+        lastSeenHandTime = now;
         const handLandmarks = results.multiHandLandmarks[0];
         
-        // Avuç içi merkezi (Landmark 9)
         const palmX = (1 - handLandmarks[9].x) * WIDTH;
         const palmY = handLandmarks[9].y * HEIGHT;
 
@@ -140,17 +135,16 @@ function onResults(results) {
         } else {
             lastHandX = handX;
             lastHandY = handY;
-            handX += (palmX - handX) * 0.55;
-            handY += (palmY - handY) * 0.55;
+            handX += (palmX - handX) * 0.6;
+            handY += (palmY - handY) * 0.6;
 
             const dx = handX - lastHandX;
             const dy = handY - lastHandY;
-            if (Math.abs(dx) > 2 || Math.abs(dy) > 2) {
+            if (Math.abs(dx) > 1.5 || Math.abs(dy) > 1.5) {
                 bladeAngle = Math.atan2(dy, dx);
             }
         }
 
-        // Yumruk Kontrolü
         const wrist = handLandmarks[0];
         const indexTip = handLandmarks[8];
         const middleTip = handLandmarks[12];
@@ -160,27 +154,25 @@ function onResults(results) {
         const distMiddle = Math.hypot(middleTip.x - wrist.x, middleTip.y - wrist.y);
         const distRing = Math.hypot(ringTip.x - wrist.x, ringTip.y - wrist.y);
 
-        isFistClosed = (distIndex < 0.28 && distMiddle < 0.28 && distRing < 0.28);
+        isFistClosed = (distIndex < 0.35 && distMiddle < 0.35 && distRing < 0.35);
 
-        if (isFistClosed) {
-            bladeTrail.push({ x: handX, y: handY });
-            if (bladeTrail.length > 14) bladeTrail.shift();
-        } else {
-            bladeTrail.length = 0;
-        }
+        bladeTrail.push({ x: handX, y: handY });
+        if (bladeTrail.length > 16) bladeTrail.shift();
+
     } else {
-        bladeTrail.length = 0;
-        handX = null;
-        handY = null;
-        isFistClosed = false;
+        if (now - lastSeenHandTime > 1500) {
+            bladeTrail.length = 0;
+            handX = null;
+            handY = null;
+            isFistClosed = false;
+        }
     }
 }
 
 // --- 5. YARDIMCI FONKSİYONLAR ---
 
 function spawnObject() {
-    // Bomba şansı %2
-    const isBomb = Math.random() < 0.02;
+    const isBomb = Math.random() < 0.01;
     let obj;
 
     if (isBomb) {
@@ -188,8 +180,8 @@ function spawnObject() {
             type: 'bomb',
             x: WIDTH * (0.2 + Math.random() * 0.6),
             y: HEIGHT + 60,
-            vx: (Math.random() - 0.5) * 5,
-            vy: -(Math.random() * 3 + 14),
+            vx: (Math.random() - 0.5) * 4,
+            vy: -(Math.random() * 2 + 13),
             radius: 50,
             rotation: 0,
             vRot: (Math.random() - 0.5) * 0.05
@@ -200,8 +192,8 @@ function spawnObject() {
             ...typeDef,
             x: WIDTH * (0.15 + Math.random() * 0.7),
             y: HEIGHT + 60,
-            vx: (Math.random() - 0.5) * 6,
-            vy: -(Math.random() * 4 + 14),
+            vx: (Math.random() - 0.5) * 5,
+            vy: -(Math.random() * 3 + 14),
             rotation: 0,
             vRot: (Math.random() - 0.5) * 0.1
         };
@@ -216,12 +208,11 @@ function checkSlice(obj) {
     const dy = handY - obj.y;
     const distance = Math.sqrt(dx * dx + dy * dy);
 
-    // GENİŞLETİLMİŞ ISABET / HURTBOX ALANI (+80px Tolerans)
-    if (distance < obj.radius + 80) {
+    if (distance < obj.radius + 130) {
         if (obj.type === 'fruit') {
             score += obj.score;
         } else if (obj.type === 'bomb') {
-            score = Math.max(0, score - 30);
+            score = Math.max(0, score - 20);
             lives--;
             if (lives <= 0) endGame();
         }
@@ -235,7 +226,6 @@ function drawBackground() {
     canvasCtx.fillStyle = '#0f172a';
     canvasCtx.fillRect(0, 0, WIDTH, HEIGHT);
 
-    // Kırmızı Desenler
     canvasCtx.fillStyle = 'rgba(230, 57, 70, 0.12)';
     const spacing = 45;
     for (let x = 22; x < WIDTH; x += spacing) {
@@ -246,7 +236,6 @@ function drawBackground() {
         }
     }
 
-    // Kulüp Filigranı
     canvasCtx.save();
     canvasCtx.font = `bold ${Math.min(WIDTH, HEIGHT) * 0.18}px sans-serif`;
     canvasCtx.textAlign = 'center';
@@ -270,7 +259,6 @@ function drawObject(obj) {
         canvasCtx.lineWidth = 4;
         canvasCtx.stroke();
 
-        // Fitil
         canvasCtx.beginPath();
         canvasCtx.moveTo(0, -obj.radius);
         canvasCtx.quadraticCurveTo(15, -obj.radius - 15, 10, -obj.radius - 25);
@@ -278,7 +266,6 @@ function drawObject(obj) {
         canvasCtx.lineWidth = 4;
         canvasCtx.stroke();
 
-        // Ateş
         canvasCtx.beginPath();
         canvasCtx.arc(10, -obj.radius - 25, 8 + Math.random() * 4, 0, Math.PI * 2);
         canvasCtx.fillStyle = '#f59e0b';
@@ -289,7 +276,7 @@ function drawObject(obj) {
         canvasCtx.fillStyle = obj.mainColor;
         canvasCtx.fill();
         canvasCtx.strokeStyle = '#ffffff';
-        canvasCtx.lineWidth = 3;
+        canvasCtx.lineWidth = 4;
         canvasCtx.stroke();
 
         canvasCtx.beginPath();
@@ -309,57 +296,47 @@ function drawObject(obj) {
 function drawKatanaAndHand() {
     if (handX === null || handY === null) return;
 
-    // 1. Yumruk Sıkılıyken Parlayan Bıçak İzi
-    if (isFistClosed && bladeTrail.length >= 2) {
+    if (bladeTrail.length >= 2) {
         canvasCtx.save();
         canvasCtx.beginPath();
         canvasCtx.moveTo(bladeTrail[0].x, bladeTrail[0].y);
         for (let i = 1; i < bladeTrail.length; i++) {
             canvasCtx.lineTo(bladeTrail[i].x, bladeTrail[i].y);
         }
-        canvasCtx.strokeStyle = '#ef4444';
-        canvasCtx.lineWidth = 22; // Kalınlaştırılmış iz
+        canvasCtx.strokeStyle = isFistClosed ? '#ef4444' : '#38bdf8';
+        canvasCtx.lineWidth = 28;
         canvasCtx.lineCap = 'round';
-        canvasCtx.shadowColor = '#f59e0b';
-        canvasCtx.shadowBlur = 30;
+        canvasCtx.shadowColor = isFistClosed ? '#f59e0b' : '#0284c7';
+        canvasCtx.shadowBlur = 35;
         canvasCtx.stroke();
         canvasCtx.restore();
     }
 
-    // 2. BÜYÜTÜLMÜŞ KATANA KILIÇ VE EL İKONU
     canvasCtx.save();
     canvasCtx.translate(handX, handY);
     canvasCtx.rotate(bladeAngle + Math.PI / 4);
 
-    // Katana Kabzası (Büyütüldü)
     canvasCtx.fillStyle = '#000000';
-    canvasCtx.fillRect(-8, 12, 16, 45);
+    canvasCtx.fillRect(-12, 18, 24, 60);
     canvasCtx.fillStyle = '#f59e0b';
-    canvasCtx.fillRect(-14, 6, 28, 8);
+    canvasCtx.fillRect(-22, 10, 44, 12);
 
-    // Katana Bıçağı (Uzunluğu 140px'e yükseltildi)
     canvasCtx.beginPath();
-    canvasCtx.moveTo(-6, 6);
-    canvasCtx.lineTo(-3, -140);
-    canvasCtx.lineTo(8, -125);
-    canvasCtx.lineTo(6, 6);
+    canvasCtx.moveTo(-10, 10);
+    canvasCtx.lineTo(-4, -240);
+    canvasCtx.lineTo(12, -220);
+    canvasCtx.lineTo(10, 10);
     canvasCtx.closePath();
 
-    if (isFistClosed) {
-        canvasCtx.fillStyle = '#ffffff';
-        canvasCtx.shadowColor = '#ef4444';
-        canvasCtx.shadowBlur = 25;
-    } else {
-        canvasCtx.fillStyle = 'rgba(226, 232, 240, 0.5)';
-        canvasCtx.shadowBlur = 0;
-    }
+    canvasCtx.fillStyle = isFistClosed ? '#ffffff' : 'rgba(255, 255, 255, 0.85)';
+    canvasCtx.shadowColor = isFistClosed ? '#ef4444' : '#38bdf8';
+    canvasCtx.shadowBlur = 30;
     canvasCtx.fill();
 
-    // El Durum Simgesi
-    canvasCtx.font = '36px sans-serif';
+    canvasCtx.font = '42px sans-serif';
     canvasCtx.textAlign = 'center';
     canvasCtx.textBaseline = 'middle';
-    canvasCtx.fillText(isFistClosed ? '✊' : '🖐️', 0, 75);
+    canvasCtx.fillText(isFistClosed ? '✊' : '🖐️', 0, 105);
 
     canvasCtx.restore();
 }
@@ -377,7 +354,7 @@ function endGame() {
 
 function resetGame() {
     score = 0;
-    lives = 3;
+    lives = 20;
     isGameOver = false;
     objects.length = 0;
     bladeTrail.length = 0;
