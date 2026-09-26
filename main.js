@@ -21,9 +21,9 @@ function resizeCanvas() {
 window.addEventListener('resize', resizeCanvas);
 resizeCanvas();
 
-// Oyun Durumu (Can 20 olarak ayarlandı)
+// Oyun Durumu (Can 10 olarak ayarlandı)
 let score = 0;
-let lives = 20;
+let lives = 10;
 let isGameOver = false;
 let isMediaPipeReady = false;
 
@@ -36,7 +36,7 @@ const fruitTypes = [
     { type: 'fruit', name: 'Elma', mainColor: '#c0392b', innerColor: '#e74c3c', score: 10, radius: 62, icon: '🍎' }
 ];
 
-// El Takibi, "Sticky Hand" ve Katana Değişkenleri
+// El Takibi ve Katana Değişkenleri
 let handX = null;
 let handY = null;
 let lastHandX = null;
@@ -46,16 +46,16 @@ let isFistClosed = false;
 let lastSeenHandTime = 0;
 const bladeTrail = [];
 
-// --- 1. OPTİMİZE EDİLMİŞ MEDIAPIPE HANDS KURULUMU ---
+// --- 1. ODANLANMIŞ MEDIAPIPE HANDS KURULUMU ---
 const hands = new Hands({locateFile: (file) => {
     return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
 }});
 
 hands.setOptions({
-    maxNumHands: 1,
+    maxNumHands: 2,
     modelComplexity: 1,
-    minDetectionConfidence: 0.4,
-    minTrackingConfidence: 0.4
+    minDetectionConfidence: 0.7,
+    minTrackingConfidence: 0.7
 });
 
 hands.onResults(onResults);
@@ -80,13 +80,11 @@ function gameLoop(timestamp) {
 
     drawBackground();
 
-    // Zamanlı Meyve Fırlatma
     if (timestamp - lastSpawnTime > 1100) {
         spawnObject();
         lastSpawnTime = timestamp;
     }
 
-    // Nesneleri Güncelle ve Çiz
     for (let i = objects.length - 1; i >= 0; i--) {
         const obj = objects[i];
         
@@ -112,7 +110,7 @@ function gameLoop(timestamp) {
     requestAnimationFrame(gameLoop);
 }
 
-// --- 4. YAPIŞKAN EL VE YUMRUK ALGILAMA ---
+// --- 4. EN YAKIN ELİ SEÇME ALGORİTMASI ---
 function onResults(results) {
     if (!isMediaPipeReady) {
         isMediaPipeReady = true;
@@ -124,10 +122,27 @@ function onResults(results) {
 
     if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
         lastSeenHandTime = now;
-        const handLandmarks = results.multiHandLandmarks[0];
         
-        const palmX = (1 - handLandmarks[9].x) * WIDTH;
-        const palmY = handLandmarks[9].y * HEIGHT;
+        let closestHand = results.multiHandLandmarks[0];
+        let maxHandArea = 0;
+
+        for (const landmarks of results.multiHandLandmarks) {
+            let minX = 1, maxX = 0, minY = 1, maxY = 0;
+            for (const lm of landmarks) {
+                if (lm.x < minX) minX = lm.x;
+                if (lm.x > maxX) maxX = lm.x;
+                if (lm.y < minY) minY = lm.y;
+                if (lm.y > maxY) maxY = lm.y;
+            }
+            const area = (maxX - minX) * (maxY - minY);
+            if (area > maxHandArea) {
+                maxHandArea = area;
+                closestHand = landmarks;
+            }
+        }
+
+        const palmX = (1 - closestHand[9].x) * WIDTH;
+        const palmY = closestHand[9].y * HEIGHT;
 
         if (handX === null) {
             handX = palmX;
@@ -135,8 +150,8 @@ function onResults(results) {
         } else {
             lastHandX = handX;
             lastHandY = handY;
-            handX += (palmX - handX) * 0.6;
-            handY += (palmY - handY) * 0.6;
+            handX += (palmX - handX) * 0.65;
+            handY += (palmY - handY) * 0.65;
 
             const dx = handX - lastHandX;
             const dy = handY - lastHandY;
@@ -145,10 +160,10 @@ function onResults(results) {
             }
         }
 
-        const wrist = handLandmarks[0];
-        const indexTip = handLandmarks[8];
-        const middleTip = handLandmarks[12];
-        const ringTip = handLandmarks[16];
+        const wrist = closestHand[0];
+        const indexTip = closestHand[8];
+        const middleTip = closestHand[12];
+        const ringTip = closestHand[16];
 
         const distIndex = Math.hypot(indexTip.x - wrist.x, indexTip.y - wrist.y);
         const distMiddle = Math.hypot(middleTip.x - wrist.x, middleTip.y - wrist.y);
@@ -160,7 +175,7 @@ function onResults(results) {
         if (bladeTrail.length > 16) bladeTrail.shift();
 
     } else {
-        if (now - lastSeenHandTime > 1500) {
+        if (now - lastSeenHandTime > 1200) {
             bladeTrail.length = 0;
             handX = null;
             handY = null;
@@ -354,7 +369,7 @@ function endGame() {
 
 function resetGame() {
     score = 0;
-    lives = 20;
+    lives = 10;
     isGameOver = false;
     objects.length = 0;
     bladeTrail.length = 0;
