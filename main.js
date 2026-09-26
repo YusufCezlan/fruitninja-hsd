@@ -8,7 +8,7 @@ const scoreValSpan = document.getElementById('scoreVal');
 const livesValSpan = document.getElementById('livesVal');
 const finalScoreSpan = document.getElementById('finalScoreVal');
 
-// Tam Ekran Ayarları
+// Dynamic Canvas Resizing
 let WIDTH = window.innerWidth;
 let HEIGHT = window.innerHeight;
 
@@ -108,9 +108,9 @@ function gameLoop(timestamp) {
         obj.vy += obj.gravity;
         obj.rotation += obj.vRot;
 
-        // Ekran Üst Sınırını Aşmasını Engelle (Sadece oyun alanında kalsın)
+        // Ekran Üst Sınırını Aşmasını Engelle
         if (obj.y - obj.radius < 40 && obj.vy < 0) {
-            obj.vy *= -0.3; // Yumuşak şekilde aşağı dönmesini sağla
+            obj.vy *= -0.3;
         }
 
         drawFruitOrBomb(obj);
@@ -120,7 +120,7 @@ function gameLoop(timestamp) {
             continue;
         }
 
-        // Yalnızca EKRANIN ALTINDAN DÜŞTÜĞÜNDE Kaçırma Sayılır (-1 Can)
+        // Düşen Meyve = -1 Can
         if (obj.y > HEIGHT + 120) {
             if (obj.type !== 'bomb') {
                 lives--;
@@ -211,7 +211,7 @@ function onResults(results) {
     }
 }
 
-// --- 5. FIRLATMA VE KONTROLLÜ YÖRÜNGE MANTIĞI ---
+// --- 5. FIRLATMA VE MEYVE ÜRETİMİ ---
 
 function spawnWave() {
     const count = Math.floor(Math.random() * 3) + 1;
@@ -232,22 +232,19 @@ function spawnObject(isBomb) {
     const currentSpeed = (0.85 + Math.random() * 0.35) * globalSpeedMultiplier;
 
     if (side < 0.5) {
-        // Alt taraftan yukarı
         x = WIDTH * (0.2 + Math.random() * 0.6);
         y = HEIGHT + 60;
         vx = (Math.random() - 0.5) * 5 * currentSpeed;
         vy = -(Math.random() * 3 + 12) * currentSpeed;
         gravity = 0.22;
     } else if (side < 0.75) {
-        // Sol kenardan (Ekranı aşmayacak kontrollü kavis)
         x = -50;
         y = HEIGHT * (0.45 + Math.random() * 0.35);
         vx = (Math.random() * 4 + 7) * currentSpeed;
         vy = -(Math.random() * 3 + 6) * currentSpeed;
         gravity = 0.20;
     } else {
-        // Sağ kenardan (Ekranı aşmayacak kontrollü kavis)
-        x = WIDTH + 50;
+        x = WIDTH + 60;
         y = HEIGHT * (0.45 + Math.random() * 0.35);
         vx = -(Math.random() * 4 + 7) * currentSpeed;
         vy = -(Math.random() * 3 + 6) * currentSpeed;
@@ -264,7 +261,12 @@ function spawnObject(isBomb) {
         });
     } else {
         const typeDef = fruitDefinitions[Math.floor(Math.random() * fruitDefinitions.length)];
-        const sizeScale = 0.8 + Math.random() * 0.4; 
+        
+        // Karpuz için ekstra boyut bonusu
+        let sizeScale = 0.85 + Math.random() * 0.45; 
+        if (typeDef.type === 'watermelon_slice') {
+            sizeScale *= 1.35; // Karpuzlar %35 daha büyük üretilir
+        }
         
         objects.push({
             type: typeDef.type,
@@ -324,7 +326,7 @@ function drawBackground() {
     canvasCtx.restore();
 }
 
-// --- 6. GELİŞTİRİLMİŞ ESTETİK MEYVE ÇİZİMLERİ ---
+// --- 6. İYİLEŞTİRİLMİŞ İRİ KARPUZ VE GENİŞ/ETLİ MUZ ÇİZİMLERİ ---
 
 function drawFruitOrBomb(obj) {
     canvasCtx.save();
@@ -354,62 +356,67 @@ function drawFruitOrBomb(obj) {
         canvasCtx.fill();
 
     } else if (obj.type === 'watermelon_slice') {
-        // GERÇEKÇİ KARPUZ DİLİMİ
+        // İRİ VE DETAYLI KARPUZ DİLİMİ
         // Dış Koyu Yeşil Kabuk
         canvasCtx.beginPath();
-        canvasCtx.arc(0, 0, r, 0.2 * Math.PI, 0.8 * Math.PI);
-        canvasCtx.lineWidth = 14;
+        canvasCtx.arc(0, 0, r * 1.1, 0.18 * Math.PI, 0.82 * Math.PI);
+        canvasCtx.lineWidth = 18;
         canvasCtx.strokeStyle = '#1e8449';
         canvasCtx.stroke();
 
-        // İç Beyaz Kabuk Şeridi
+        // İç Açık Yeşil/Beyaz Kabuk Katmanı
         canvasCtx.beginPath();
-        canvasCtx.arc(0, 0, r - 6, 0.22 * Math.PI, 0.78 * Math.PI);
-        canvasCtx.lineWidth = 6;
+        canvasCtx.arc(0, 0, r * 1.02, 0.20 * Math.PI, 0.80 * Math.PI);
+        canvasCtx.lineWidth = 8;
         canvasCtx.strokeStyle = '#abebc6';
         canvasCtx.stroke();
 
-        // Kırmızı Et
+        // İştah Açıcı Kırmızı Et
         canvasCtx.beginPath();
-        canvasCtx.moveTo(0, -r * 0.4);
-        canvasCtx.arc(0, 0, r - 12, 0.23 * Math.PI, 0.77 * Math.PI);
+        canvasCtx.moveTo(0, -r * 0.5);
+        canvasCtx.arc(0, 0, r * 0.95, 0.21 * Math.PI, 0.79 * Math.PI);
         canvasCtx.closePath();
         canvasCtx.fillStyle = '#e74c3c';
         canvasCtx.fill();
 
         // Çekirdekler
         canvasCtx.fillStyle = '#1c2833';
-        const seedPos = [[-r*0.3, r*0.3], [0, r*0.45], [r*0.3, r*0.3], [-r*0.15, r*0.1], [r*0.15, r*0.1]];
+        const seedPos = [
+            [-r*0.35, r*0.3], [0, r*0.5], [r*0.35, r*0.3], 
+            [-r*0.2, r*0.1], [r*0.2, r*0.1], [0, -r*0.1]
+        ];
         seedPos.forEach(([sx, sy]) => {
             canvasCtx.beginPath();
-            canvasCtx.ellipse(sx, sy, 3, 5, 0.2, 0, Math.PI * 2);
+            canvasCtx.ellipse(sx, sy, 4, 6.5, 0.2, 0, Math.PI * 2);
             canvasCtx.fill();
         });
 
     } else if (obj.type === 'banana') {
-        // ŞIK VE HACİMLİ MUZ ÇİZİMİ
+        // ETLİ, GENİŞ VE HACİMLİ MUZ ÇİZİMİ
         canvasCtx.beginPath();
-        canvasCtx.moveTo(-r * 0.9, -r * 0.3);
-        canvasCtx.quadraticCurveTo(0, r * 0.9, r * 0.9, -r * 0.1);
-        canvasCtx.quadraticCurveTo(0, r * 0.3, -r * 0.9, -r * 0.3);
+        // Üst Kavis
+        canvasCtx.moveTo(-r * 1.0, -r * 0.25);
+        canvasCtx.quadraticCurveTo(0, r * 1.1, r * 1.0, 0);
+        // Alt Kavis (Genişletilmiş gövde)
+        canvasCtx.quadraticCurveTo(0, r * 0.25, -r * 1.0, -r * 0.25);
         canvasCtx.fillStyle = '#f1c40f';
         canvasCtx.fill();
         canvasCtx.strokeStyle = '#f39c12';
-        canvasCtx.lineWidth = 3;
-        canvasCtx.stroke();
-
-        // Muz Gölge Şeridi
-        canvasCtx.beginPath();
-        canvasCtx.moveTo(-r * 0.8, -r * 0.2);
-        canvasCtx.quadraticCurveTo(0, r * 0.7, r * 0.8, -r * 0.05);
-        canvasCtx.strokeStyle = '#d4ac0d';
         canvasCtx.lineWidth = 4;
         canvasCtx.stroke();
 
-        // Kahverengi Uçlar
+        // Orta Vurgu/Gölge Katmanı (Hacim katar)
+        canvasCtx.beginPath();
+        canvasCtx.moveTo(-r * 0.9, -r * 0.15);
+        canvasCtx.quadraticCurveTo(0, r * 0.85, r * 0.9, 0.05);
+        canvasCtx.strokeStyle = '#e67e22';
+        canvasCtx.lineWidth = 6;
+        canvasCtx.stroke();
+
+        // Muz Uçları (Kahverengi saplar)
         canvasCtx.fillStyle = '#5d4037';
-        canvasCtx.fillRect(-r * 0.95, -r * 0.35, 7, 7);
-        canvasCtx.fillRect(r * 0.88, -r * 0.12, 6, 6);
+        canvasCtx.fillRect(-r * 1.08, -r * 0.32, 10, 10);
+        canvasCtx.fillRect(r * 0.98, -0.05 * r, 8, 8);
 
     } else if (obj.type === 'strawberry') {
         canvasCtx.beginPath();
