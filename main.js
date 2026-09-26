@@ -8,7 +8,7 @@ const scoreValSpan = document.getElementById('scoreVal');
 const livesValSpan = document.getElementById('livesVal');
 const finalScoreSpan = document.getElementById('finalScoreVal');
 
-// Dynamic Canvas Resizing
+// Tam Ekran Ayarları
 let WIDTH = window.innerWidth;
 let HEIGHT = window.innerHeight;
 
@@ -29,7 +29,7 @@ let isMediaPipeReady = false;
 
 // Zaman, Hızlanma ve Çarpan Sistemi
 let startTime = 0;
-let elapsedTime = 0; // saniye
+let elapsedTime = 0;
 let scoreMultiplier = 1;
 let globalSpeedMultiplier = 1;
 
@@ -88,15 +88,12 @@ function gameLoop(timestamp) {
     if (!startTime) startTime = timestamp;
     elapsedTime = Math.floor((timestamp - startTime) / 1000);
 
-    // Zamanla Hızlanma ve Çarpan Artışı
-    // Her 15 saniyede bir çarpan ve hız artar
-    scoreMultiplier = 1 + Math.floor(elapsedTime / 15) * 0.5; // 1x, 1.5x, 2x...
-    globalSpeedMultiplier = 1 + (elapsedTime / 45); // Yavaşça hızlanır
+    scoreMultiplier = 1 + Math.floor(elapsedTime / 15) * 0.5;
+    globalSpeedMultiplier = 1 + (elapsedTime / 50);
 
     drawBackground();
 
-    // Dinamik Fırlatma Aralığı (Zamanla sıklaşır)
-    const spawnInterval = Math.max(700, 1300 - (elapsedTime * 8));
+    const spawnInterval = Math.max(750, 1300 - (elapsedTime * 6));
     if (timestamp - lastSpawnTime > spawnInterval) {
         spawnWave();
         lastSpawnTime = timestamp;
@@ -105,10 +102,16 @@ function gameLoop(timestamp) {
     for (let i = objects.length - 1; i >= 0; i--) {
         const obj = objects[i];
         
+        // Fizik Hareketi
         obj.x += obj.vx;
         obj.y += obj.vy;
         obj.vy += obj.gravity;
         obj.rotation += obj.vRot;
+
+        // Ekran Üst Sınırını Aşmasını Engelle (Sadece oyun alanında kalsın)
+        if (obj.y - obj.radius < 40 && obj.vy < 0) {
+            obj.vy *= -0.3; // Yumuşak şekilde aşağı dönmesini sağla
+        }
 
         drawFruitOrBomb(obj);
 
@@ -117,8 +120,8 @@ function gameLoop(timestamp) {
             continue;
         }
 
-        // Kaçırma Kontrolü
-        if (obj.y > HEIGHT + 160 || obj.x < -200 || obj.x > WIDTH + 200) {
+        // Yalnızca EKRANIN ALTINDAN DÜŞTÜĞÜNDE Kaçırma Sayılır (-1 Can)
+        if (obj.y > HEIGHT + 120) {
             if (obj.type !== 'bomb') {
                 lives--;
                 updateUI();
@@ -134,7 +137,7 @@ function gameLoop(timestamp) {
     requestAnimationFrame(gameLoop);
 }
 
-// --- 4. EL ALGILAMA ---
+// --- 4. EN YAKIN ELİ SEÇME ALGORİTMASI ---
 function onResults(results) {
     if (!isMediaPipeReady) {
         isMediaPipeReady = true;
@@ -208,7 +211,7 @@ function onResults(results) {
     }
 }
 
-// --- 5. RASTGELE FIRLATMA MANTIĞI ---
+// --- 5. FIRLATMA VE KONTROLLÜ YÖRÜNGE MANTIĞI ---
 
 function spawnWave() {
     const count = Math.floor(Math.random() * 3) + 1;
@@ -226,26 +229,29 @@ function spawnObject(isBomb) {
     const side = Math.random();
     let x, y, vx, vy, gravity;
 
-    const currentSpeed = (0.9 + Math.random() * 0.4) * globalSpeedMultiplier;
+    const currentSpeed = (0.85 + Math.random() * 0.35) * globalSpeedMultiplier;
 
-    if (side < 0.4) {
+    if (side < 0.5) {
+        // Alt taraftan yukarı
         x = WIDTH * (0.2 + Math.random() * 0.6);
         y = HEIGHT + 60;
-        vx = (Math.random() - 0.5) * 6 * currentSpeed;
-        vy = -(Math.random() * 4 + 13) * currentSpeed;
+        vx = (Math.random() - 0.5) * 5 * currentSpeed;
+        vy = -(Math.random() * 3 + 12) * currentSpeed;
+        gravity = 0.22;
+    } else if (side < 0.75) {
+        // Sol kenardan (Ekranı aşmayacak kontrollü kavis)
+        x = -50;
+        y = HEIGHT * (0.45 + Math.random() * 0.35);
+        vx = (Math.random() * 4 + 7) * currentSpeed;
+        vy = -(Math.random() * 3 + 6) * currentSpeed;
         gravity = 0.20;
-    } else if (side < 0.7) {
-        x = -60;
-        y = HEIGHT * (0.35 + Math.random() * 0.45);
-        vx = (Math.random() * 5 + 8) * currentSpeed;
-        vy = -(Math.random() * 4 + 7) * currentSpeed;
-        gravity = 0.18;
     } else {
-        x = WIDTH + 60;
-        y = HEIGHT * (0.35 + Math.random() * 0.45);
-        vx = -(Math.random() * 5 + 8) * currentSpeed;
-        vy = -(Math.random() * 4 + 7) * currentSpeed;
-        gravity = 0.18;
+        // Sağ kenardan (Ekranı aşmayacak kontrollü kavis)
+        x = WIDTH + 50;
+        y = HEIGHT * (0.45 + Math.random() * 0.35);
+        vx = -(Math.random() * 4 + 7) * currentSpeed;
+        vy = -(Math.random() * 3 + 6) * currentSpeed;
+        gravity = 0.20;
     }
 
     if (isBomb) {
@@ -282,7 +288,6 @@ function checkSlice(obj) {
 
     if (distance < obj.radius + 115) {
         if (obj.type !== 'bomb') {
-            // Çarpanlı Puan Kazanımı
             const pointsGained = Math.round(obj.baseScore * scoreMultiplier);
             score += pointsGained;
         } else {
@@ -319,7 +324,7 @@ function drawBackground() {
     canvasCtx.restore();
 }
 
-// --- 6. GERÇEKÇİ MEYVE VE BİREBİR KARPUZ DİLİMİ ÇİZİMİ ---
+// --- 6. GELİŞTİRİLMİŞ ESTETİK MEYVE ÇİZİMLERİ ---
 
 function drawFruitOrBomb(obj) {
     canvasCtx.save();
@@ -349,49 +354,62 @@ function drawFruitOrBomb(obj) {
         canvasCtx.fill();
 
     } else if (obj.type === 'watermelon_slice') {
-        // BİREBİR KARPUZ DİLİMİ (Üçgen Form, Kabuk ve Çekirdekler)
+        // GERÇEKÇİ KARPUZ DİLİMİ
+        // Dış Koyu Yeşil Kabuk
         canvasCtx.beginPath();
-        canvasCtx.moveTo(-r, -r * 0.5);
-        canvasCtx.lineTo(r, -r * 0.5);
-        canvasCtx.quadraticCurveTo(0, r * 1.2, -r, -r * 0.5);
-        canvasCtx.closePath();
+        canvasCtx.arc(0, 0, r, 0.2 * Math.PI, 0.8 * Math.PI);
+        canvasCtx.lineWidth = 14;
+        canvasCtx.strokeStyle = '#1e8449';
+        canvasCtx.stroke();
 
-        // Kırmızı Meyve Eti
+        // İç Beyaz Kabuk Şeridi
+        canvasCtx.beginPath();
+        canvasCtx.arc(0, 0, r - 6, 0.22 * Math.PI, 0.78 * Math.PI);
+        canvasCtx.lineWidth = 6;
+        canvasCtx.strokeStyle = '#abebc6';
+        canvasCtx.stroke();
+
+        // Kırmızı Et
+        canvasCtx.beginPath();
+        canvasCtx.moveTo(0, -r * 0.4);
+        canvasCtx.arc(0, 0, r - 12, 0.23 * Math.PI, 0.77 * Math.PI);
+        canvasCtx.closePath();
         canvasCtx.fillStyle = '#e74c3c';
         canvasCtx.fill();
 
-        // Yeşil Dış Kabuk
-        canvasCtx.strokeStyle = '#27ae60';
-        canvasCtx.lineWidth = 8;
-        canvasCtx.stroke();
-
-        // Beyaz/Açık Yeşil İç Kabuk Şeridi
-        canvasCtx.strokeStyle = '#2ecc71';
-        canvasCtx.lineWidth = 3;
-        canvasCtx.stroke();
-
-        // Siyah Çekirdekler
+        // Çekirdekler
         canvasCtx.fillStyle = '#1c2833';
-        const seeds = [[-r*0.4, -r*0.1], [0, r*0.3], [r*0.4, -r*0.1], [-r*0.2, r*0.1], [r*0.2, r*0.1]];
-        seeds.forEach(([sx, sy]) => {
+        const seedPos = [[-r*0.3, r*0.3], [0, r*0.45], [r*0.3, r*0.3], [-r*0.15, r*0.1], [r*0.15, r*0.1]];
+        seedPos.forEach(([sx, sy]) => {
             canvasCtx.beginPath();
-            canvasCtx.arc(sx, sy, 3.5, 0, Math.PI * 2);
+            canvasCtx.ellipse(sx, sy, 3, 5, 0.2, 0, Math.PI * 2);
             canvasCtx.fill();
         });
 
     } else if (obj.type === 'banana') {
+        // ŞIK VE HACİMLİ MUZ ÇİZİMİ
         canvasCtx.beginPath();
-        canvasCtx.moveTo(-r * 0.8, -r * 0.4);
-        canvasCtx.quadraticCurveTo(0, r * 0.8, r * 0.9, -r * 0.2);
-        canvasCtx.quadraticCurveTo(0, r * 0.4, -r * 0.8, -r * 0.4);
+        canvasCtx.moveTo(-r * 0.9, -r * 0.3);
+        canvasCtx.quadraticCurveTo(0, r * 0.9, r * 0.9, -r * 0.1);
+        canvasCtx.quadraticCurveTo(0, r * 0.3, -r * 0.9, -r * 0.3);
         canvasCtx.fillStyle = '#f1c40f';
         canvasCtx.fill();
         canvasCtx.strokeStyle = '#f39c12';
+        canvasCtx.lineWidth = 3;
+        canvasCtx.stroke();
+
+        // Muz Gölge Şeridi
+        canvasCtx.beginPath();
+        canvasCtx.moveTo(-r * 0.8, -r * 0.2);
+        canvasCtx.quadraticCurveTo(0, r * 0.7, r * 0.8, -r * 0.05);
+        canvasCtx.strokeStyle = '#d4ac0d';
         canvasCtx.lineWidth = 4;
         canvasCtx.stroke();
 
-        canvasCtx.fillStyle = '#7e5109';
-        canvasCtx.fillRect(-r * 0.85, -r * 0.45, 8, 8);
+        // Kahverengi Uçlar
+        canvasCtx.fillStyle = '#5d4037';
+        canvasCtx.fillRect(-r * 0.95, -r * 0.35, 7, 7);
+        canvasCtx.fillRect(r * 0.88, -r * 0.12, 6, 6);
 
     } else if (obj.type === 'strawberry') {
         canvasCtx.beginPath();
@@ -441,7 +459,7 @@ function drawFruitOrBomb(obj) {
     canvasCtx.restore();
 }
 
-// --- 7. %85 ORANINDA KÜÇÜLTÜLMÜŞ KATANA ÇİZİMİ ---
+// --- 7. KATANA VE EL ÇİZİMİ ---
 
 function drawKatanaAndHand() {
     if (handX === null || handY === null) return;
@@ -454,7 +472,7 @@ function drawKatanaAndHand() {
             canvasCtx.lineTo(bladeTrail[i].x, bladeTrail[i].y);
         }
         canvasCtx.strokeStyle = isFistClosed ? '#ef4444' : '#38bdf8';
-        canvasCtx.lineWidth = 24; // %85 Çap
+        canvasCtx.lineWidth = 24;
         canvasCtx.lineCap = 'round';
         canvasCtx.shadowColor = isFistClosed ? '#f59e0b' : '#0284c7';
         canvasCtx.shadowBlur = 30;
@@ -466,13 +484,11 @@ function drawKatanaAndHand() {
     canvasCtx.translate(handX, handY);
     canvasCtx.rotate(bladeAngle + Math.PI / 4);
 
-    // Katana Kabzası
     canvasCtx.fillStyle = '#000000';
     canvasCtx.fillRect(-10, 15, 20, 50);
     canvasCtx.fillStyle = '#f59e0b';
     canvasCtx.fillRect(-18, 8, 36, 10);
 
-    // %85 Oranında Küçültülmüş Katana Bıçağı (204px)
     canvasCtx.beginPath();
     canvasCtx.moveTo(-8, 8);
     canvasCtx.lineTo(-3, -204);
@@ -485,7 +501,6 @@ function drawKatanaAndHand() {
     canvasCtx.shadowBlur = 25;
     canvasCtx.fill();
 
-    // El İkonu
     canvasCtx.font = '36px sans-serif';
     canvasCtx.textAlign = 'center';
     canvasCtx.textBaseline = 'middle';
@@ -494,7 +509,7 @@ function drawKatanaAndHand() {
     canvasCtx.restore();
 }
 
-// --- 8. ZAMAN VE ÇARPAN BİLGİ SEKMESİ (ÜST EKRAN) ---
+// --- 8. ÜST BİLGİ SEKMESİ ---
 
 function drawTopUI() {
     canvasCtx.save();
@@ -502,7 +517,6 @@ function drawTopUI() {
     canvasCtx.fillStyle = '#f1c40f';
     canvasCtx.textAlign = 'center';
     
-    // Dakika:Saniye Formatı
     const mins = Math.floor(elapsedTime / 60).toString().padStart(2, '0');
     const secs = (elapsedTime % 60).toString().padStart(2, '0');
     
