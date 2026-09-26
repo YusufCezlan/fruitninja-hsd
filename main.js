@@ -27,13 +27,14 @@ let lives = 10;
 let isGameOver = false;
 let isMediaPipeReady = false;
 
-// Meyve ve Bomba Tanımları
+// Nesne Havuzu
 const objects = [];
-const fruitTypes = [
-    { type: 'fruit', name: 'Karpuz', mainColor: '#27ae60', innerColor: '#e74c3c', score: 15, radius: 75, icon: '🍉' },
-    { type: 'fruit', name: 'Portakal', mainColor: '#e67e22', innerColor: '#f39c12', score: 10, radius: 65, icon: '🍊' },
-    { type: 'fruit', name: 'Limon', mainColor: '#f1c40f', innerColor: '#f39c12', score: 10, radius: 60, icon: '🍋' },
-    { type: 'fruit', name: 'Elma', mainColor: '#c0392b', innerColor: '#e74c3c', score: 10, radius: 62, icon: '🍎' }
+const fruitDefinitions = [
+    { name: 'Karpuz', type: 'watermelon', baseScore: 15 },
+    { name: 'Muz', type: 'banana', baseScore: 10 },
+    { name: 'Çilek', type: 'strawberry', baseScore: 12 },
+    { name: 'Portakal', type: 'orange', baseScore: 10 },
+    { name: 'Limon', type: 'lemon', baseScore: 10 }
 ];
 
 // El Takibi ve Katana Değişkenleri
@@ -80,8 +81,8 @@ function gameLoop(timestamp) {
 
     drawBackground();
 
-    // 1.3 Saniyede Bir Dalga Fırlatma
-    if (timestamp - lastSpawnTime > 1300) {
+    // 1.2 Saniyede Bir Dalga Fırlatma
+    if (timestamp - lastSpawnTime > 1200) {
         spawnWave();
         lastSpawnTime = timestamp;
     }
@@ -89,12 +90,14 @@ function gameLoop(timestamp) {
     for (let i = objects.length - 1; i >= 0; i--) {
         const obj = objects[i];
         
+        // Fizik Hareketi
         obj.x += obj.vx;
         obj.y += obj.vy;
         obj.vy += obj.gravity;
         obj.rotation += obj.vRot;
 
-        drawObject(obj);
+        // Meyveyi Özel Şekliyle Çiz
+        drawFruitOrBomb(obj);
 
         // Kesme Kontrolü
         if (checkSlice(obj)) {
@@ -103,10 +106,9 @@ function gameLoop(timestamp) {
         }
 
         // Ekrandan Düşme / Kaçırma Kontrolü
-        if (obj.y > HEIGHT + 150 || obj.x < -180 || obj.x > WIDTH + 180) {
-            // Kaçırılan Meyve -> 1 Can Götürür
-            if (obj.type === 'fruit') {
-                lives--;
+        if (obj.y > HEIGHT + 160 || obj.x < -200 || obj.x > WIDTH + 200) {
+            if (obj.type !== 'bomb') {
+                lives--; // KAÇIRILAN HER MEYVE = -1 CAN
                 updateUI();
                 if (lives <= 0) endGame();
             }
@@ -193,18 +195,17 @@ function onResults(results) {
     }
 }
 
-// --- 5. FARKLI YÖNLERDEN FIRLATMA VE DİNAMİK BOMBA MANTIĞI ---
+// --- 5. RASTGELE FIRLATMA, BOYUT VE HIZ MANTIĞI ---
 
 function spawnWave() {
-    // Aynı anda 1 ile 3 arası nesne fırlat
-    const count = Math.floor(Math.random() * 3) + 1;
+    const count = Math.floor(Math.random() * 3) + 1; // 1 ile 3 arası
     const bombChance = (count === 1) ? 0.12 : 0.02;
 
     for (let i = 0; i < count; i++) {
         setTimeout(() => {
             const isBomb = Math.random() < bombChance;
             spawnObject(isBomb);
-        }, i * 160);
+        }, i * 150);
     }
 }
 
@@ -212,48 +213,56 @@ function spawnObject(isBomb) {
     const side = Math.random();
     let x, y, vx, vy, gravity;
 
+    // Hız Varyasyonu (Hızlı ve Yavaşlar karışık)
+    const speedMult = 0.85 + Math.random() * 0.5; // %85 ile %135 arası hız çarpanı
+
     if (side < 0.4) {
-        // Alt taraftan yukarıya
+        // Alt taraftan yukarı
         x = WIDTH * (0.2 + Math.random() * 0.6);
         y = HEIGHT + 60;
-        vx = (Math.random() - 0.5) * 6;
-        vy = -(Math.random() * 3 + 14);
+        vx = (Math.random() - 0.5) * 6 * speedMult;
+        vy = -(Math.random() * 4 + 13) * speedMult;
         gravity = 0.20;
     } else if (side < 0.7) {
-        // Sol kenardan sağ/yukarı çapraz
+        // Sol kenardan sağa
         x = -60;
         y = HEIGHT * (0.35 + Math.random() * 0.45);
-        vx = Math.random() * 6 + 8;
-        vy = -(Math.random() * 4 + 7);
+        vx = (Math.random() * 5 + 8) * speedMult;
+        vy = -(Math.random() * 4 + 7) * speedMult;
         gravity = 0.18;
     } else {
-        // Sağ kenardan sol/yukarı çapraz
+        // Sağ kenardan sola
         x = WIDTH + 60;
         y = HEIGHT * (0.35 + Math.random() * 0.45);
-        vx = -(Math.random() * 6 + 8);
-        vy = -(Math.random() * 4 + 7);
+        vx = -(Math.random() * 5 + 8) * speedMult;
+        vy = -(Math.random() * 4 + 7) * speedMult;
         gravity = 0.18;
     }
 
-    let obj;
     if (isBomb) {
-        obj = {
+        objects.push({
             type: 'bomb',
             x, y, vx, vy, gravity,
             radius: 50,
             rotation: 0,
             vRot: (Math.random() - 0.5) * 0.05
-        };
+        });
     } else {
-        const typeDef = fruitTypes[Math.floor(Math.random() * fruitTypes.length)];
-        obj = {
-            ...typeDef,
+        const typeDef = fruitDefinitions[Math.floor(Math.random() * fruitDefinitions.length)];
+        // Boyut Çeşitliliği (Küçük: 0.7, Orta: 1.0, Büyük: 1.3)
+        const sizeScale = 0.75 + Math.random() * 0.55; 
+        
+        objects.push({
+            type: typeDef.type,
+            name: typeDef.name,
+            score: Math.round(typeDef.baseScore * sizeScale),
+            radius: 55 * sizeScale,
+            scale: sizeScale,
             x, y, vx, vy, gravity,
-            rotation: 0,
+            rotation: Math.random() * Math.PI,
             vRot: (Math.random() - 0.5) * 0.1
-        };
+        });
     }
-    objects.push(obj);
 }
 
 function checkSlice(obj) {
@@ -263,12 +272,12 @@ function checkSlice(obj) {
     const dy = handY - obj.y;
     const distance = Math.sqrt(dx * dx + dy * dy);
 
-    if (distance < obj.radius + 130) {
-        if (obj.type === 'fruit') {
+    if (distance < obj.radius + 120) {
+        if (obj.type !== 'bomb') {
             score += obj.score;
-        } else if (obj.type === 'bomb') {
+        } else {
             score = Math.max(0, score - 5);
-            lives -= 5; // Bombaya vurunca 5 CAN gider
+            lives -= 5; // BOMBAYA VURUNCA -5 CAN
             if (lives <= 0) endGame();
         }
         updateUI();
@@ -300,49 +309,128 @@ function drawBackground() {
     canvasCtx.restore();
 }
 
-function drawObject(obj) {
+// --- 6. ÖZEL ŞEKİLLİ MEYVE ÇİZİMLERİ ---
+
+function drawFruitOrBomb(obj) {
     canvasCtx.save();
     canvasCtx.translate(obj.x, obj.y);
     canvasCtx.rotate(obj.rotation);
+    const r = obj.radius;
 
     if (obj.type === 'bomb') {
+        // Bomba Gövdesi
         canvasCtx.beginPath();
-        canvasCtx.arc(0, 0, obj.radius, 0, Math.PI * 2);
+        canvasCtx.arc(0, 0, r, 0, Math.PI * 2);
         canvasCtx.fillStyle = '#1e293b';
         canvasCtx.fill();
         canvasCtx.strokeStyle = '#ef4444';
         canvasCtx.lineWidth = 4;
         canvasCtx.stroke();
 
+        // Fitil & Ateş
         canvasCtx.beginPath();
-        canvasCtx.moveTo(0, -obj.radius);
-        canvasCtx.quadraticCurveTo(15, -obj.radius - 15, 10, -obj.radius - 25);
+        canvasCtx.moveTo(0, -r);
+        canvasCtx.quadraticCurveTo(15, -r - 15, 10, -r - 25);
         canvasCtx.strokeStyle = '#d97706';
         canvasCtx.lineWidth = 4;
         canvasCtx.stroke();
 
         canvasCtx.beginPath();
-        canvasCtx.arc(10, -obj.radius - 25, 8 + Math.random() * 4, 0, Math.PI * 2);
+        canvasCtx.arc(10, -r - 25, 8 + Math.random() * 4, 0, Math.PI * 2);
         canvasCtx.fillStyle = '#f59e0b';
         canvasCtx.fill();
-    } else {
+
+    } else if (obj.type === 'watermelon') {
+        // Karpuz (Yeşil Çizgili Oval Gövde)
         canvasCtx.beginPath();
-        canvasCtx.arc(0, 0, obj.radius, 0, Math.PI * 2);
-        canvasCtx.fillStyle = obj.mainColor;
+        canvasCtx.ellipse(0, 0, r * 1.1, r * 0.9, 0, 0, Math.PI * 2);
+        canvasCtx.fillStyle = '#27ae60';
         canvasCtx.fill();
-        canvasCtx.strokeStyle = '#ffffff';
+        canvasCtx.strokeStyle = '#1e8449';
+        canvasCtx.lineWidth = 6;
+        canvasCtx.stroke();
+
+        // Koyu Çizgiler
+        canvasCtx.strokeStyle = '#145a32';
+        canvasCtx.lineWidth = 5;
+        for (let i = -1; i <= 1; i++) {
+            canvasCtx.beginPath();
+            canvasCtx.arc(0, 0, r * 0.8, (i * 0.5) - 0.3, (i * 0.5) + 0.3);
+            canvasCtx.stroke();
+        }
+
+    } else if (obj.type === 'banana') {
+        // Muz (Kıvrımlı Sarı Muz Şekli)
+        canvasCtx.beginPath();
+        canvasCtx.moveTo(-r * 0.8, -r * 0.4);
+        canvasCtx.quadraticCurveTo(0, r * 0.8, r * 0.9, -r * 0.2);
+        canvasCtx.quadraticCurveTo(0, r * 0.4, -r * 0.8, -r * 0.4);
+        canvasCtx.fillStyle = '#f1c40f';
+        canvasCtx.fill();
+        canvasCtx.strokeStyle = '#f39c12';
         canvasCtx.lineWidth = 4;
         canvasCtx.stroke();
 
+        // Uç sap detayları
+        canvasCtx.fillStyle = '#7e5109';
+        canvasCtx.fillRect(-r * 0.85, -r * 0.45, 8, 8);
+
+    } else if (obj.type === 'strawberry') {
+        // Çilek (Kalp/Üçgen Formu)
         canvasCtx.beginPath();
-        canvasCtx.arc(0, 0, obj.radius * 0.75, 0, Math.PI * 2);
-        canvasCtx.fillStyle = obj.innerColor;
+        canvasCtx.moveTo(0, r * 0.9);
+        canvasCtx.bezierCurveTo(-r * 1.1, 0, -r * 0.8, -r * 0.8, 0, -r * 0.6);
+        canvasCtx.bezierCurveTo(r * 0.8, -r * 0.8, r * 1.1, 0, 0, r * 0.9);
+        canvasCtx.fillStyle = '#e74c3c';
         canvasCtx.fill();
 
-        canvasCtx.font = `${obj.radius * 0.9}px sans-serif`;
-        canvasCtx.textAlign = 'center';
-        canvasCtx.textBaseline = 'middle';
-        canvasCtx.fillText(obj.icon, 0, 0);
+        // Benekler
+        canvasCtx.fillStyle = '#f9e79f';
+        const dots = [[-0.3, -0.1], [0.3, -0.1], [0, 0.3], [-0.2, 0.4], [0.2, 0.4]];
+        dots.forEach(([dx, dy]) => {
+            canvasCtx.beginPath();
+            canvasCtx.arc(dx * r, dy * r, 3, 0, Math.PI * 2);
+            canvasCtx.fill();
+        });
+
+        // Yeşil Yapraklar
+        canvasCtx.fillStyle = '#2ecc71';
+        canvasCtx.beginPath();
+        canvasCtx.arc(0, -r * 0.6, r * 0.35, 0, Math.PI, true);
+        canvasCtx.fill();
+
+    } else if (obj.type === 'orange') {
+        // Portakal (Yuvarlak Gözenekli Doku)
+        canvasCtx.beginPath();
+        canvasCtx.arc(0, 0, r, 0, Math.PI * 2);
+        canvasCtx.fillStyle = '#e67e22';
+        canvasCtx.fill();
+        canvasCtx.strokeStyle = '#d35400';
+        canvasCtx.lineWidth = 4;
+        canvasCtx.stroke();
+
+        // İç halka
+        canvasCtx.beginPath();
+        canvasCtx.arc(0, 0, r * 0.75, 0, Math.PI * 2);
+        canvasCtx.fillStyle = '#f39c12';
+        canvasCtx.fill();
+
+    } else if (obj.type === 'lemon') {
+        // Limon (Uçları Çıkıntılı Oval Form)
+        canvasCtx.beginPath();
+        canvasCtx.ellipse(0, 0, r * 1.1, r * 0.8, 0, 0, Math.PI * 2);
+        canvasCtx.fillStyle = '#f1c40f';
+        canvasCtx.fill();
+        canvasCtx.strokeStyle = '#f39c12';
+        canvasCtx.lineWidth = 4;
+        canvasCtx.stroke();
+
+        // Sivri Uçlar
+        canvasCtx.beginPath();
+        canvasCtx.arc(-r * 1.1, 0, r * 0.15, 0, Math.PI * 2);
+        canvasCtx.arc(r * 1.1, 0, r * 0.15, 0, Math.PI * 2);
+        canvasCtx.fillStyle = '#f39c12';
+        canvasCtx.fill();
     }
 
     canvasCtx.restore();
