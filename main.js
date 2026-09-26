@@ -21,7 +21,7 @@ function resizeCanvas() {
 window.addEventListener('resize', resizeCanvas);
 resizeCanvas();
 
-// Oyun Durumu (Can 10 olarak ayarlandı)
+// Oyun Durumu
 let score = 0;
 let lives = 10;
 let isGameOver = false;
@@ -46,7 +46,7 @@ let isFistClosed = false;
 let lastSeenHandTime = 0;
 const bladeTrail = [];
 
-// --- 1. ODANLANMIŞ MEDIAPIPE HANDS KURULUMU ---
+// --- 1. MEDIAPIPE HANDS KURULUMU ---
 const hands = new Hands({locateFile: (file) => {
     return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
 }});
@@ -80,8 +80,9 @@ function gameLoop(timestamp) {
 
     drawBackground();
 
-    if (timestamp - lastSpawnTime > 1100) {
-        spawnObject();
+    // En fazla 3 nesnelik dalgalar halinde fırlatma (Her 1.3 saniyede bir)
+    if (timestamp - lastSpawnTime > 1300) {
+        spawnWave();
         lastSpawnTime = timestamp;
     }
 
@@ -90,7 +91,7 @@ function gameLoop(timestamp) {
         
         obj.x += obj.vx;
         obj.y += obj.vy;
-        obj.vy += 0.20;
+        obj.vy += obj.gravity;
         obj.rotation += obj.vRot;
 
         drawObject(obj);
@@ -100,7 +101,7 @@ function gameLoop(timestamp) {
             continue;
         }
 
-        if (obj.y > HEIGHT + 120) {
+        if (obj.y > HEIGHT + 150 || obj.x < -150 || obj.x > WIDTH + 150) {
             objects.splice(i, 1);
         }
     }
@@ -184,19 +185,56 @@ function onResults(results) {
     }
 }
 
-// --- 5. YARDIMCI FONKSİYONLAR ---
+// --- 5. DİNAMİK BOMBA ORANLI VE EN FAZLA 3 NESNELİ FIRLATMA ---
 
-function spawnObject() {
-    const isBomb = Math.random() < 0.01;
+function spawnWave() {
+    // Aynı anda en fazla 3 tane nesne çıkabilir
+    const count = Math.floor(Math.random() * 3) + 1; // 1, 2 veya 3 tane
+
+    // Dalgadaki eleman sayısına göre bomba çıkma ihtimali ayarlanır
+    // Çoklu meyve varsa bomba şansı çok düşük (%2), tekli gelişlerde daha yüksek (%10)
+    let bombChance = (count === 1) ? 0.10 : 0.02;
+
+    for (let i = 0; i < count; i++) {
+        setTimeout(() => {
+            const isBomb = Math.random() < bombChance;
+            spawnObject(isBomb);
+        }, i * 140);
+    }
+}
+
+function spawnObject(isBomb) {
+    const side = Math.random();
+    let x, y, vx, vy, gravity;
+
+    if (side < 0.6) {
+        // Alt taraftan yukarı
+        x = WIDTH * (0.15 + Math.random() * 0.7);
+        y = HEIGHT + 60;
+        vx = (Math.random() - 0.5) * 6;
+        vy = -(Math.random() * 3 + 14);
+        gravity = 0.20;
+    } else if (side < 0.8) {
+        // Sol kenardan
+        x = -50;
+        y = HEIGHT * (0.3 + Math.random() * 0.5);
+        vx = Math.random() * 5 + 9;
+        vy = -(Math.random() * 4 + 8);
+        gravity = 0.18;
+    } else {
+        // Sağ kenardan
+        x = WIDTH + 50;
+        y = HEIGHT * (0.3 + Math.random() * 0.5);
+        vx = -(Math.random() * 5 + 9);
+        vy = -(Math.random() * 4 + 8);
+        gravity = 0.18;
+    }
+
     let obj;
-
     if (isBomb) {
         obj = {
             type: 'bomb',
-            x: WIDTH * (0.2 + Math.random() * 0.6),
-            y: HEIGHT + 60,
-            vx: (Math.random() - 0.5) * 4,
-            vy: -(Math.random() * 2 + 13),
+            x, y, vx, vy, gravity,
             radius: 50,
             rotation: 0,
             vRot: (Math.random() - 0.5) * 0.05
@@ -205,10 +243,7 @@ function spawnObject() {
         const typeDef = fruitTypes[Math.floor(Math.random() * fruitTypes.length)];
         obj = {
             ...typeDef,
-            x: WIDTH * (0.15 + Math.random() * 0.7),
-            y: HEIGHT + 60,
-            vx: (Math.random() - 0.5) * 5,
-            vy: -(Math.random() * 3 + 14),
+            x, y, vx, vy, gravity,
             rotation: 0,
             vRot: (Math.random() - 0.5) * 0.1
         };
@@ -227,7 +262,7 @@ function checkSlice(obj) {
         if (obj.type === 'fruit') {
             score += obj.score;
         } else if (obj.type === 'bomb') {
-            score = Math.max(0, score - 20);
+            score = Math.max(0, score - 5);
             lives--;
             if (lives <= 0) endGame();
         }
