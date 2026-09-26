@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HSD Fruit Slice - El Algılama</title>
+    <link rel="stylesheet" href="style.css">
+    
+    <!-- MediaPipe Gerekli Kütüphaneler -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+</head>
+<body>
+
+    <div class="game-container">
+        <!-- Oyun Alanı -->
+        <canvas id="gameCanvas" width="800" height="600"></canvas>
+        
+        <!-- Webcam Görüntüsü (Gizli, sadece veri sağlamak için) -->
+        <video id="input_video" class="input_video" width="800" height="600" autoplay playsinline></video>
+        
+        <!-- UI Öğeleri -->
+        <div id="ui">
+            <div class="score">Puan: <span id="scoreVal">0</span></div>
+            <div class="lives">Can: <span id="livesVal">3</span></div>
+        </div>
+        
+        <div id="game-over" class="hidden">
+            <h1>OYUN BİTTİ</h1>
+            <p>Final Puanın: <span id="finalScoreVal">0</span></p>
+            <button onclick="resetGame()">Tekrar Oyna</button>
+        </div>
+        
+        <div id="loading">
+            <h2>HSD El Algılama Yükleniyor...</h2>
+            <p>Lütfen kameraya izin verin ve elinizi gösterin.</p>
+        </div>
+    </div>
+
+    <script src="main.js"></script>
+</body>
+</html>
